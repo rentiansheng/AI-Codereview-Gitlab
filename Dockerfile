@@ -20,7 +20,12 @@ COPY ui.py ./ui.py
 COPY conf/prompt_templates.yml ./conf/prompt_templates.yml
 
 # 使用 supervisord 作为启动命令
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+
+
+FROM base AS all
+COPY conf/supervisord.app.conf /etc/supervisor/conf.d/supervisord.app.conf
+COPY conf/supervisord.worker.conf /etc/supervisor/conf.d/supervisord.worker.conf
 
 FROM base AS app
 COPY conf/supervisord.app.conf /etc/supervisor/conf.d/supervisord.conf
@@ -29,3 +34,4 @@ EXPOSE 5001 5002
 
 FROM base AS worker
 COPY ./conf/supervisord.worker.conf /etc/supervisor/conf.d/supervisord.conf
+

@@ -21,6 +21,7 @@ from biz.utils.im import notifier
 from biz.utils.log import logger
 from biz.utils.queue import handle_queue
 from biz.utils.reporter import Reporter
+from biz.gitlab.webhook_handler import get_mr_info_from_url
 
 from biz.utils.config_checker import check_config
 
@@ -154,6 +155,24 @@ def handle_github_webhook(event_type, data):
         logger.error(error_message)
         return jsonify(error_message), 400
 
+# 处理 GitLab Merge Request Webhook
+@api_app.route('/review/gitlab/mr', methods=['POST'])
+def handle_gitlab_mr():
+    # 获取请求的JSON数据
+    if request.is_json:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON"}), 400
+        # 优先从环境变量获取，如果没有，则从请求头获取
+        gitlab_token = os.getenv('GITLAB_ACCESS_TOKEN') or request.headers.get('X-Gitlab-Token')
+        # 如果gitlab_token为空，返回错误
+        if not gitlab_token:
+            return jsonify({'message': 'Missing GitLab access token'}), 400
+
+        mock_hook_data = get_mr_info_from_url(data["mr"],gitlab_token )
+        return handle_gitlab_webhook(mock_hook_data)
+    else:
+        return jsonify({'message': 'Invalid data format'}), 400
 
 def handle_gitlab_webhook(data):
     object_kind = data.get("object_kind")

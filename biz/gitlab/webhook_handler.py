@@ -309,3 +309,72 @@ class PushHandler:
             return self.repository_compare(before, after)
         else:
             return []
+
+
+
+### 根据mr 地址 获取mr 信息，转化为 webhook_data 结构
+def get_mr_info_from_url(mr_url: str, gitlab_token: str) -> dict:
+    """
+    根据 Merge Request 的 URL 获取其详细信息，并转换为类似于 GitLab Webhook 的数据结构。
+    :param mr_url: Merge Request 的完整 URL，例如：https://gitlab.com/username/repo/-/merge_requests/1
+    :param gitlab_token: 用于访问 GitLab API 的私有令牌
+    :return: 包含 Merge Request 详细信息的字典，结构类似于 GitLab Webhook 数据
+    """
+    # 提取项目路径和 MR IID
+    pattern = r'^(https?://[^/]+)/(.*)/-/merge_requests/(\d+)$'
+    match = re.match(pattern, mr_url)
+    if not match:
+        raise ValueError("Invalid Merge Request URL format.")
+
+    base_url = match.group(1)
+    project_path = match.group(2)
+    mr_iid = match.group(3)
+
+    # 编码项目路径以适应 API URL
+    from urllib.parse import quote
+    encoded_project_path = quote(project_path, safe='')
+
+    # 构建 API 请求 URL
+    api_url = f"{base_url}/api/v4/projects/{encoded_project_path}/merge_requests/{mr_iid}"
+
+    headers = {
+        'Private-Token': gitlab_token
+    }
+
+    response = requests.get(api_url, headers=headers, verify=False)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch MR details: {response.status_code}, {response.text}")
+
+    mr_data = response.json()
+
+    # 构建类似于 Webhook 的数据结构
+    webhook_data = {
+        "object_kind": "merge_request",
+        "event_type": "merge_request",
+        "user": mr_data.get("author", {}),
+        "project": {
+            "id": mr_data.get("source_project_id", {}),
+            "name":  project_path,
+            "description": "",
+            "web_url": mr_data.get("web_url", {}),
+
+        } ,
+        "object_attributes": {
+            "id": mr_data.get("id"),
+            "iid": mr_data.get("iid"),
+            "title": mr_data.get("title"),
+            "description": mr_data.get("description"),
+            "state": mr_data.get("state"),
+            "action": "open",  # 假设为打开状态，可以根据需要调整
+            "source_branch": mr_data.get("source_branch"),
+            "target_branch": mr_data.get("target_branch"),
+            "source_project_id": mr_data.get("source_project_id"),
+            "target_project_id": mr_data.get("target_project_id"),
+            "last_commit": mr_data.get("last_commit", {}),
+            "url": mr_data.get("web_url"),
+        },
+        "repository": mr_data.get("source", {}),
+        "assignees": mr_data.get("assignees", []),
+        "labels": mr_data.get("labels", []),            
+    }
+    return webhook_data
